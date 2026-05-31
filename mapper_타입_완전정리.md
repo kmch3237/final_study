@@ -244,6 +244,51 @@ public Notice findByNext(Map<String, Object> map);
 public void deleteNoticeFile(Map<String, Object> map);
 ```
 
+---
+
+#### Map<String, Object> 란?
+
+Map은 **이름표(Key) + 값(Value)** 쌍으로 데이터를 담는 바구니다.
+
+```
+Map<String, Object>
+     ↑       ↑
+   Key 타입  Value 타입
+  (이름표)   (아무 타입이나 가능)
+```
+
+실생활로 비유하면 **사물함**과 같다.
+```
+사물함 번호(Key)  →  내용물(Value)
+"kwd"           →  "맛집"         (String)
+"offset"        →  0              (int)
+"size"          →  10             (int)
+"schType"       →  "subject"      (String)
+```
+
+---
+
+#### 어떻게 만들고 넣고 꺼내나
+
+```java
+// 1. Map 만들기
+Map<String, Object> map = new HashMap<>();
+
+// 2. 값 넣기 — map.put("이름표", 값)
+map.put("kwd", "맛집");        // 검색어
+map.put("schType", "subject"); // 검색 타입
+map.put("offset", 0);          // 페이지 시작점
+map.put("size", 10);           // 한 페이지 개수
+
+// 3. 값 꺼내기 — map.get("이름표")
+String kwd = (String) map.get("kwd");   // "맛집"
+int offset = (int) map.get("offset");   // 0
+```
+
+---
+
+#### XML에서는 #{이름표} 로 꺼냄
+
 ```xml
 <select id="listNotice" parameterType="map" resultType="com.doit.app.model.Notice">
     SELECT NUM, NOTICE, NAME, SUBJECT, HITCOUNT
@@ -254,21 +299,60 @@ public void deleteNoticeFile(Map<String, Object> map);
         </if>
     </where>
     ORDER BY NUM DESC OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+    <!--                        ↑ map.put("offset", 0) 에서 꺼냄  -->
 </select>
 ```
 
-- 서비스에서 이렇게 넘김:
+- `#{offset}` → `map.get("offset")` 과 같은 의미
+- `map.put("key", 값)` 할 때 쓴 이름표를 XML에서 `#{이름표}` 로 그대로 사용
+
+---
+
+#### 서비스에서 넘기는 전체 흐름
+
 ```java
-Map<String, Object> map = new HashMap<>();
-map.put("kwd", kwd);
-map.put("schType", schType);
-map.put("offset", offset);
-map.put("size", size);
-mapper.listNotice(map);
+// NoticeServiceImpl.java
+public List<Notice> listNotice(String schType, String kwd, int offset, int size) {
+
+    // 값이 4개인데 @Param 쓰기 애매하고, 딱 맞는 VO도 없음
+    // → Map에 담아서 한번에 넘김
+    Map<String, Object> map = new HashMap<>();
+    map.put("schType", schType);
+    map.put("kwd", kwd);
+    map.put("offset", offset);
+    map.put("size", size);
+
+    return noticeMapper.listNotice(map);  // Map 통째로 넘김
+}
 ```
 
-- VO에 없는 값들 (페이지 번호, 검색어, 검색 타입 등)을 같이 넘길 때
-- 딱 맞는 VO 만들기 애매할 때
+---
+
+#### 언제 Map을 쓰나 vs 다른 방법 비교
+
+| 상황 | 방법 |
+|------|------|
+| 값 1개 | `long num` 그냥 넘김 |
+| 값 2~3개, VO 있음 | VO 넘김 |
+| 값 2~3개, VO 없음 | `@Param` 사용 |
+| 값 4개 이상, 타입 다양 | `Map<String, Object>` |
+| 페이징 + 검색 조건 같이 | `Map<String, Object>` |
+
+---
+
+#### 왜 Object인가?
+
+```java
+Map<String, String> → 값이 전부 String일 때만 가능
+Map<String, Object> → String, int, Long 뭐든 다 담을 수 있음
+```
+
+```java
+map.put("kwd", "맛집");   // String
+map.put("offset", 0);     // int
+map.put("num", 123L);     // Long
+// → Object 이기 때문에 다 담을 수 있음
+```
 
 ---
 
