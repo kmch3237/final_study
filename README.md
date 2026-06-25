@@ -11,3 +11,4 @@
 
 ## 개념 정리
 - [콘솔 키오스크 → Spring Boot 전환: JPA + MySQL + yml 완전 정리](키오스크_스프링전환_JPA_DB연결_완전정리.md)
+- [콘솔 키오스크 → Spring Boot 전환 ②: Service · Controller · REST/JSON/JPA · 연관관계 완전 정리](키오스크_스프링전환_Service_Controller_연관관계_완전정리.md)
