@@ -336,6 +336,84 @@ public class OrderRequest {
 
 ---
 
+## 8. ⭐ Lombok — 생성자 · getter · setter를 애너테이션으로 자동 생성
+
+지금까지 우리는 **생성자 · getter · setter를 손으로 다 타이핑**했다. 학습엔 좋지만(직접 쳐봐야 구조가 익는다), 실무에선 이 진부한 코드가 클래스마다 수십 줄씩 쌓인다. 이걸 **애너테이션 한 줄로 컴파일 때 자동 생성**해주는 라이브러리가 **Lombok**이다.
+
+### 동작 원리 한 줄
+Lombok은 **컴파일 시점에** `@Getter` 같은 애너테이션을 보고 **실제 메서드 바이트코드를 끼워 넣는다**. 즉 소스엔 안 보여도 컴파일된 결과엔 `getName()`이 진짜로 존재한다. (런타임 마법이 아니라 컴파일 단계 코드 생성)
+
+### 우리가 손으로 쓴 것 ↔ Lombok 애너테이션
+| 손으로 쓴 코드 | Lombok 애너테이션 | 무엇을 생성 |
+|---|---|---|
+| `getX()` 전부 | `@Getter` | 모든 필드의 getter |
+| `setX()` 전부 | `@Setter` | 모든 필드의 setter |
+| `public Menu() {}` | `@NoArgsConstructor` | 매개변수 없는 기본 생성자 |
+| `public Menu(모든필드)` | `@AllArgsConstructor` | 모든 필드를 받는 생성자 |
+| **`final` 필드만 받는 생성자** | **`@RequiredArgsConstructor`** | `final`(또는 `@NonNull`) 필드만 받는 생성자 |
+| 위 여러 개 한 번에 | `@Data` | @Getter+@Setter+toString+equals 등 묶음 |
+
+### ⭐ 생성자 주입(DI)을 `@RequiredArgsConstructor`로
+우리가 컨트롤러/서비스마다 **반복해서 손으로 쓴** 이 패턴 —
+```java
+// 우리가 직접 쓴 것 (RestaurantController)
+private final RestaurantService restaurantService;
+
+public RestaurantController(RestaurantService restaurantService) {   // ← 이 생성자를 매번 타이핑
+    this.restaurantService = restaurantService;
+}
+```
+Lombok이면 **생성자를 지운다.** `@RequiredArgsConstructor`가 **`final` 필드를 받는 생성자를 자동 생성**해주기 때문:
+```java
+// Lombok 버전
+@RestController
+@RequestMapping("/restaurants")
+@RequiredArgsConstructor   // ★ final 필드(restaurantService)를 받는 생성자를 자동으로 만들어줌
+public class RestaurantController {
+    private final RestaurantService restaurantService;   // 필드 선언만!
+    // 생성자 없음 — Lombok이 컴파일 때 끼워 넣는다 → 스프링이 그 생성자로 DI
+}
+```
+> 💡 왜 `@RequiredArgsConstructor`가 DI에 딱 맞나: 의존성을 `private final`로 두는 게 생성자 주입의 정석인데, 이 애너테이션이 **바로 그 `final` 필드들만** 받는 생성자를 만들어준다. 필드가 2개·3개로 늘어도(예: OrderService의 Repository 3개) 생성자를 안 고쳐도 된다.
+
+### 엔티티/DTO에 적용하면
+```java
+// 우리 Menu (손으로 getter/setter/기본생성자)  →  Lombok 버전
+@Entity
+@Getter @Setter
+@NoArgsConstructor                       // JPA/Jackson용 기본 생성자
+public class Menu {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String menuName;
+    private int price;
+    // getter/setter 0줄 — @Getter/@Setter가 다 만들어줌
+}
+```
+> ⚠️ 단, `setMenuQty`의 "0이면 품절" 같은 **직접 만든 규칙이 든 메서드**는 Lombok에 맡기지 말고 손으로 둬야 한다(로직이 있으니까). Lombok은 **단순 위임만** 자동화한다.
+
+### 도입 방법 + 주의
+```xml
+<!-- pom.xml -->
+<dependency>
+  <groupId>org.projectlombok</groupId>
+  <artifactId>lombok</artifactId>
+  <scope>provided</scope>   <!-- 컴파일에만 필요, 런타임 배포엔 불필요 -->
+</dependency>
+```
+- **IDE 플러그인 필요:** Lombok이 생성한 메서드를 IDE가 알아보게 하려면 Lombok 플러그인 설치 + "annotation processing" 켜기. (STS/IntelliJ 둘 다)
+
+### 장단점 & 언제 쓰나
+| | 장점 | 단점/주의 |
+|---|---|---|
+| Lombok | 보일러플레이트 제거, 가독성↑, 필드 추가해도 생성자/getter 자동 반영 | 숨겨진 코드라 처음엔 낯섦, IDE 설정 필요, `@Data`를 엔티티에 막 쓰면 양방향 연관에서 toString 무한루프 위험 |
+
+> ⭐ **실무에선 거의 표준**으로 쓴다(특히 `@Getter @Setter @RequiredArgsConstructor`). 다만 **엔티티에 `@Data`/`@ToString`은 조심** — 우리가 본 양방향 연관(Order↔OrderItem)에서 toString/무한루프가 또 터질 수 있다(연관 필드는 `@ToString.Exclude`).
+>
+> 📌 **이 프로젝트에선 일부러 손으로 썼다.** 구조를 눈과 손으로 익히는 게 목적이라서. Lombok은 "그 진부한 코드를 자동화하는 도구"로 이해해두고, 나중에 패턴이 충분히 익으면 도입하면 된다. **"무엇을 자동화하는지"를 알고 쓰는 것**과 그냥 쓰는 건 다르다.
+
+---
+
 ## 검증 결과 (실제 실행)
 
 ### 주문 생성 → 결제 (정상)
